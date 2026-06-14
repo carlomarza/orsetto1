@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>L'Orsetto Nuotatore Vocale - Deluxe Touch</title>
+    <title>L'Orsetto Nuotatore Vocale - Pro Version</title>
     <style>
         body {
             margin: 0;
@@ -33,27 +33,54 @@
             box-shadow: 0 10px 20px rgba(0,0,0,0.2);
             z-index: 30;
         }
-        /* Pannello di Controllo Touch per Android */
+        
+        /* BOTTONE PER APRIRE/CHIUDERE IL MENU */
+        #TriggerMenu {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.75);
+            color: #00ffcc;
+            border: 2px solid white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 25;
+            display: none; /* Appare solo a gioco avviato */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+
+        /* PANNELLO DI CONTROLLO A SCOMPARSA (Slitta dall'alto) */
         #pannello-controllo {
             position: absolute;
-            bottom: 10px; left: 10px;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 10px 15px;
+            top: -400px; /* Nascosto inizialmente sopra lo schermo */
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.85);
+            padding: 15px;
             border-radius: 15px;
             font-size: 13px;
-            z-index: 10;
-            display: none;
+            z-index: 20;
             backdrop-filter: blur(5px);
             border: 2px solid rgba(255,255,255,0.2);
-            max-width: 280px;
+            width: 260px;
+            transition: top 0.4s ease-in-out; /* Animazione fluida di apertura */
         }
+        
+        /* Classe attivata via JavaScript per mostrare il menu */
+        #pannello-controllo.aperto {
+            top: 55px; /* Scende sotto il bottone di trigger */
+        }
+
         .controllo-gruppo {
-            margin-bottom: 6px;
+            margin-bottom: 8px;
         }
         .controllo-gruppo label {
             display: block;
             margin-bottom: 2px;
             color: #00ffcc;
+            font-weight: bold;
         }
         .controllo-gruppo input {
             width: 100%;
@@ -67,7 +94,7 @@
             font-weight: bold;
             font-size: 12px;
             cursor: pointer;
-            margin-top: 4px;
+            margin-top: 5px;
             width: 100%;
             display: block;
         }
@@ -92,6 +119,8 @@
 
     <button id="pulsante-avvio">🐻 ENTRA NEL MARE DELLE CARAMELLE! 🍭</button>
 
+    <button id="TriggerMenu">⚙️ Opzioni Menu</button>
+
     <div id="pannello-controllo">
         <div class="controllo-gruppo">
             <label>Voce Grave (Min): <span id="val-min">150</span> Hz</label>
@@ -105,6 +134,12 @@
             <label>Velocità Caramelle: <span id="val-vel">3</span></label>
             <input type="range" id="vel-caramelle" min="1" max="10" step="0.5" value="3">
         </div>
+        
+        <div class="controllo-gruppo">
+            <label>Quantità Caramelle (Ritmo): <span id="val-qty">Media</span></label>
+            <input type="range" id="qty-caramelle" min="30" max="180" step="15" value="90">
+        </div>
+
         <div class="controllo-gruppo">
             <label>Dimensione Base Orso: <span id="val-size">35</span></label>
             <input type="range" id="size-orso" min="15" max="80" value="35">
@@ -122,44 +157,51 @@
         const pulsante = document.getElementById('pulsante-avvio');
         const avviso = document.getElementById('avviso-landscape');
         const pannello = document.getElementById('pannello-controllo');
+        const triggerMenu = document.getElementById('TriggerMenu');
 
         const sliderMin = document.getElementById('freq-min');
         const sliderMax = document.getElementById('freq-max');
         const sliderVel = document.getElementById('vel-caramelle');
+        const sliderQty = document.getElementById('qty-caramelle');
         const sliderSize = document.getElementById('size-orso');
         
         const txtMin = document.getElementById('val-min');
         const txtMax = document.getElementById('val-max');
         const txtVel = document.getElementById('val-vel');
+        const txtQty = document.getElementById('val-qty');
         const txtSize = document.getElementById('val-size');
         
         const btnToggleReattivo = document.getElementById('btn-toggle-reattivo');
         const btnCambiaFaccia = document.getElementById('btn-cambia-faccia');
 
-        // Parametri di calibrazione
+        // Parametri iniziali
         let FREQ_MIN = 150;
         let FREQ_MAX = 800;
         let VELOCITA_MOLTIPLICATORE = 3.0;
+        let SPAWN_RITMO = 90; // Frame di attesa tra una caramella e l'altra (meno frame = più caramelle)
         let GRANDEZZA_BASE = 35;
         let GRANDEZZA_REATTIVA = true;
 
-        // Gestione facce bambini
-        let facceBambini = []; // Conterrà gli oggetti Image() caricati
-        let indiceFacciaAttuale = -1; // -1 = Orsetto normale
-        let nomiFacce = ["Orsetto Classico", "Bambino 1", "Bambino 2", "Bambino 3"];
+        // Gestione Menu a scomparsa al click/tocco
+        triggerMenu.addEventListener('click', () => {
+            pannello.classList.toggle('aperto');
+        });
 
-        // Pre-carichiamo 3 immagini di bambini (devono essere caricate nella stessa repository di GitHub!)
-        for (let i = 1; i <= 3; i++) {
-            let img = new Image();
-            img.src = `bambino${i}.png`; // supporta anche .jpg se li rinomini nel codice
-            img.onload = () => { facceBambini.push({ id: i, img: img }); };
-        }
-
-        // Ascoltatori dei controlli Touch
+        // Configurazione cursori
         sliderMin.addEventListener('input', (e) => { FREQ_MIN = parseInt(e.target.value); txtMin.innerText = FREQ_MIN; });
         sliderMax.addEventListener('input', (e) => { FREQ_MAX = parseInt(e.target.value); txtMax.innerText = FREQ_MAX; });
         sliderVel.addEventListener('input', (e) => { VELOCITA_MOLTIPLICATORE = parseFloat(e.target.value); txtVel.innerText = VELOCITA_MOLTIPLICATORE; });
         sliderSize.addEventListener('input', (e) => { GRANDEZZA_BASE = parseInt(e.target.value); txtSize.innerText = GRANDEZZA_BASE; orsetto.raggioBase = GRANDEZZA_BASE; });
+        
+        // Mappatura testo per il ritmo delle caramelle
+        sliderQty.addEventListener('input', (e) => { 
+            SPAWN_RITMO = parseInt(e.target.value); 
+            if(SPAWN_RITMO <= 45) txtQty.innerText = "Tantissime! 🔥";
+            else if(SPAWN_RITMO <= 75) txtQty.innerText = "Molte";
+            else if(SPAWN_RITMO <= 110) txtQty.innerText = "Media";
+            else if(SPAWN_RITMO <= 150) txtQty.innerText = "Poche";
+            else txtQty.innerText = "Rarissime 💤";
+        });
 
         btnToggleReattivo.addEventListener('click', () => {
             GRANDEZZA_REATTIVA = !GRANDEZZA_REATTIVA;
@@ -167,19 +209,26 @@
             btnToggleReattivo.style.backgroundColor = GRANDEZZA_REATTIVA ? "#4682B4" : "#808080";
         });
 
+        // Logica facce bambini
+        let facceBambini = [];
+        let indiceFacciaAttuale = -1;
+        for (let i = 1; i <= 3; i++) {
+            let img = new Image();
+            img.src = `bambino${i}.png`;
+            img.onload = () => { facceBambini.push({ id: i, img: img }); };
+        }
+
         btnCambiaFaccia.addEventListener('click', () => {
             if (facceBambini.length === 0) {
-                alert("Nessuna foto 'bambino1.png' trovata nella cartella GitHub. Caricale per vederle qui!");
+                alert("Carica i file bambino1.png, bambino2.png su GitHub per attivare questa opzione!");
                 return;
             }
             indiceFacciaAttuale++;
-            if (indiceFacciaAttuale >= facceBambini.length) {
-                indiceFacciaAttuale = -1; // Torna all'orso standard
-            }
+            if (indiceFacciaAttuale >= facceBambini.length) indiceFacciaAttuale = -1;
             btnCambiaFaccia.innerText = "🎭 Faccia: " + (indiceFacciaAttuale === -1 ? "Orsetto" : `Bambino ${facceBambini[indiceFacciaAttuale].id}`);
         });
 
-        // Stato del Gioco
+        // Stato Oggetti
         let orsetto = { x: 180, y: window.innerHeight / 2, raggioBase: 35, raggioAttuale: 35 };
         let caramelle = [];
         let punteggio = 0;
@@ -190,7 +239,6 @@
 
         let audioContext, analyser, dataArray;
 
-        // Immagine di sfondo opzionale per internet
         let sfondoImg = new Image();
         let sfondoCaricato = false;
         sfondoImg.src = "sfondo.jpg";
@@ -216,205 +264,18 @@
                 screen.orientation.lock('landscape').catch(() => {});
             }
             pulsante.style.display = 'none';
-            pannello.style.display = 'block';
+            triggerMenu.style.display = 'block'; // Mostra l'ingranaggio delle opzioni
             await inizializzaAudio();
             giocoAvviato = true;
             loopPrincipale();
         });
 
-        async function inizializzaAudio() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const sorgente = audioContext.createMediaStreamSource(stream);
-                analyser = audioContext.createAnalyser();
-                analyser.fftSize = 2048;
-                sorgente.connect(analyser);
-                dataArray = new Uint8Array(analyser.frequencyBinCount);
-            } catch (err) {
-                alert("Sblocca il microfono per giocare!");
-            }
-        }
-
-        // Suono gnam.wav o gnam.mp3 per il browser (caricabile opzionalmente nella repo)
         let audioGnam = new Audio('gnam.wav');
-
         function playSuonoGnam() {
-            // Se hai caricato gnam.wav su GitHub suonerà il file reale, altrimenti usa il sintetizzatore di riserva
             audioGnam.play().catch(() => {
                 if (!audioContext) return;
                 let osc = audioContext.createOscillator();
                 let guadagno = audioContext.createGain();
                 osc.type = 'triangle';
                 osc.frequency.setValueAtTime(300, audioContext.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.15);
-                guadagno.gain.setValueAtTime(0.3, audioContext.currentTime);
-                guadagno.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
-                osc.connect(guadagno); guadagno.connect(audioContext.destination);
-                osc.start(); osc.stop(audioContext.currentTime + 0.15);
-            });
-        }
-
-        function analizzaAudio() {
-            if (!analyser) return { volume: 0, frequenza: 0 };
-            analyser.getByteFrequencyData(dataArray);
-            let volumeMassimo = 0, indiceFrequenzaMassima = 0;
-
-            for (let i = 0; i < dataArray.length; i++) {
-                if (dataArray[i] > volumeMassimo) {
-                    volumeMassimo = dataArray[i];
-                    indiceFrequenzaMassima = i;
-                }
-            }
-            return {
-                volume: volumeMassimo / 255,
-                frequenza: indiceFrequenzaMassima * audioContext.sampleRate / analyser.fftSize
-            };
-        }
-
-        function disegnaOrsettoCompleto(x, y, r) {
-            ctx.save();
-            let oscillazione = Math.sin(tempoAnimazione) * (r * 0.4);
-
-            // Zampine e Corpo
-            ctx.fillStyle = "#8B4513";
-            ctx.beginPath(); ctx.arc(x - r * 0.4 + oscillazione, y - r * 0.8, r * 0.3, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(x - r * 0.4 - oscillazione, y + r * 0.8, r * 0.3, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(x + r * 0.6 - oscillazione, y - r * 0.6, r * 0.28, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.arc(x + r * 0.6 + oscillazione, y + r * 0.6, r * 0.28, 0, Math.PI * 2); ctx.fill();
-
-            ctx.fillStyle = "#A0522D";
-            ctx.beginPath(); ctx.ellipse(x, y, r * 1.2, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
-
-            // Orecchie
-            ctx.fillStyle = "#8B4513";
-            ctx.beginPath(); ctx.arc(x - r * 0.5, y - r * 1.3, r * 0.3, 0, Math.PI * 2); ctx.arc(x + r * 0.3, y - r * 1.3, r * 0.3, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "#FFB6C1";
-            ctx.beginPath(); ctx.arc(x - r * 0.5, y - r * 1.3, r * 0.15, 0, Math.PI * 2); ctx.arc(x + r * 0.3, y - r * 1.3, r * 0.15, 0, Math.PI * 2); ctx.fill();
-
-            // GESTIONE CORGENTE FACCIA BAMBINO (Ritaglio Circolare HTML5)
-            if (indiceFacciaAttuale >= 0 && facceBambini[indiceFacciaAttuale]) {
-                let imgBimbo = facceBambini[indiceFacciaAttuale].img;
-                let dimTesta = r * 1.6;
-                
-                ctx.save();
-                // Creiamo un cerchio di ritaglio invisibile sopra il muso
-                ctx.beginPath();
-                ctx.arc(x - r * 0.2, y - r * 0.6, r * 0.8, 0, Math.PI * 2);
-                ctx.clip();
-                // Incolliamo la foto quadrata dentro il cerchio ritagliato
-                ctx.drawImage(imgBimbo, x - r * 0.2 - r * 0.8, y - r * 0.6 - r * 0.8, dimTesta, dimTesta);
-                ctx.restore();
-            } else {
-                // Testa dell'Orsetto standard
-                ctx.fillStyle = "#A0522D";
-                ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.6, r * 0.8, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = "#FFF8DC";
-                ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.4, r * 0.35, 0, Math.PI * 2); ctx.fill();
-                ctx.fillStyle = "#000000";
-                ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.5, r * 0.1, 0, Math.PI * 2); ctx.fill();
-                ctx.beginPath(); ctx.arc(x - r * 0.4, y - r * 0.8, r * 0.08, 0, Math.PI * 2); ctx.arc(x + r * 0.0, y - r * 0.8, r * 0.08, 0, Math.PI * 2); ctx.fill();
-            }
-
-            ctx.restore();
-        }
-
-        function disegnaCaramella(x, y, colore) {
-            ctx.save(); ctx.fillStyle = colore; ctx.beginPath();
-            ctx.moveTo(x - 22, y - 8); ctx.lineTo(x - 22, y + 8); ctx.lineTo(x, y);
-            ctx.moveTo(x + 22, y - 8); ctx.lineTo(x + 22, y + 8); ctx.lineTo(x, y); ctx.fill();
-            ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.stroke();
-            ctx.restore();
-        }
-
-        function disegnaChupaChups(x, y) {
-            ctx.save(); ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 5; ctx.lineCap = "round";
-            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 25, y + 25); ctx.stroke();
-            let gradiente = ctx.createRadialGradient(x - 5, y - 5, 2, x, y, 22);
-            gradiente.addColorStop(0, '#FFFFFF'); gradiente.addColorStop(0.3, '#FF007F'); gradiente.addColorStop(0.8, '#FFD700');
-            ctx.fillStyle = gradiente; ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.beginPath(); ctx.arc(x - 6, y - 6, 6, 0, Math.PI * 2); ctx.fill();
-            ctx.restore();
-        }
-
-        function loopPrincipale() {
-            if (!giocoAvviato) return;
-
-            // Gestione Sfondo / Effetto Visivo Flash
-            if (timerFlash > 0) {
-                ctx.fillStyle = "#FFD700"; // Flash Giallo Oro
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                timerFlash--;
-            } else if (sfondoCaricato) {
-                ctx.drawImage(sfondoImg, 0, 0, canvas.width, canvas.height);
-            } else {
-                ctx.fillStyle = "#5F9EA0";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-            }
-
-            let datiAudio = analizzaAudio();
-
-            // Calcolo grandezza basato sul toggle touch
-            if (GRANDEZZA_REATTIVA) {
-                orsetto.raggioAttuale = orsetto.raggioBase + (datiAudio.volume * 80);
-            } else {
-                orsetto.raggioAttuale = orsetto.raggioBase;
-            }
-            
-            tempoAnimazione += 0.2;
-
-            if (datiAudio.volume > 0.08) {
-                let freqBloccata = Math.max(FREQ_MIN, Math.min(FREQ_MAX, datiAudio.frequenza));
-                let percentuale = (freqBloccata - FREQ_MIN) / (FREQ_MAX - FREQ_MIN);
-                let bersaglioY = canvas.height - (percentuale * (canvas.height - orsetto.raggioAttuale * 2)) - orsetto.raggioAttuale;
-                orsetto.y += (bersaglioY - orsetto.y) * 0.12;
-            }
-
-            // Generazione caramelle
-            timerCaramelle++;
-            if (timerCaramelle > 90) {
-                let tipoChupa = Math.random() < 0.15;
-                let colori = ['#FF1493', '#00FF00', '#FFD700', '#FF4500', '#9400D3'];
-                caramelle.push({
-                    x: canvas.width + 40,
-                    y: Math.random() * (canvas.height - 140) + 70,
-                    velocita: (Math.random() * 1.5 + 1) * (VELOCITA_MOLTIPLICATORE / 3),
-                    colore: colori[Math.floor(Math.random() * colori.length)],
-                    isSuper: tipoChupa
-                });
-                if (tipoChupa) timerFlash = 8; // Attiva l'effetto visivo flash lampo
-                timerCaramelle = 0;
-            }
-
-            for (let i = caramelle.length - 1; i >= 0; i--) {
-                let c = caramelle[i];
-                c.x -= c.velocita * (VELOCITA_MOLTIPLICATORE / 2);
-
-                if (c.isSuper) disegnaChupaChups(c.x, c.y);
-                else disegnaCaramella(c.x, c.y, c.colore);
-
-                let distX = orsetto.x - c.x; let distY = orsetto.y - c.y;
-                let distanza = Math.sqrt(distX * distX + distY * distY);
-                let raggioCollisione = c.isSuper ? (orsetto.raggioAttuale + 26) : (orsetto.raggioAttuale + 20);
-
-                if (distanza < raggioCollisione) {
-                    punteggio += c.isSuper ? 5 : 1;
-                    playSuonoGnam();
-                    caramelle.splice(i, 1);
-                    continue;
-                }
-                if (c.x < -40) caramelle.splice(i, 1);
-            }
-
-            disegnaOrsettoCompleto(orsetto.x, orsetto.y, orsetto.raggioAttuale);
-
-            // Testo Punteggio con ombra
-            ctx.fillStyle = "white"; ctx.font = "bold 30px Arial"; ctx.strokeStyle = "#2F4F4F"; ctx.lineWidth = 5;
-            ctx.strokeText("Punti: " + punteggio, 20, 40); ctx.fillText("Punti: " + punteggio, 20, 40);
-
-            requestAnimationFrame(loopPrincipale);
-        }
-    </script>
-</body>
-</html>
+                osc.frequency.exponentialRampToValueAtTime(
