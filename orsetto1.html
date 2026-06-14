@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>L'Orsetto Mangia-Caramelle Vocale</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #87CEEB; /* Sfondo azzurro cielo per i bambini */
+            font-family: 'Arial Rounded MT Bold', Arial, sans-serif;
+            color: white;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #pulsante-avvio {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            font-size: 22px;
+            cursor: pointer;
+            background-color: #FF69B4; /* Rosa confetto */
+            color: white;
+            border: 4px solid white;
+            border-radius: 50px;
+            font-weight: bold;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        #avviso-landscape {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: #87CEEB;
+            z-index: 20;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .icona-ruota {
+            width: 60px;
+            height: 60px;
+            border: 4px solid white;
+            border-radius: 10px;
+            animation: ruota 2s infinite ease-in-out;
+        }
+        @keyframes ruota {
+            0% { transform: rotate(0deg); }
+            50% { transform: rotate(90deg); }
+            100% { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="avviso-landscape">
+        <div class="icona-ruota"></div>
+        <p style="font-size: 24px;">Gira il telefono di lato!<br><small>Attiva la rotazione automatica</small></p>
+    </div>
+
+    <button id="pulsante-avvio">🐻 CLICCA QUI PER GIOCARE! 🍭</button>
+    <canvas id="quadroGioco"></canvas>
+
+    <script>
+        const canvas = document.getElementById('quadroGioco');
+        const ctx = canvas.getContext('2d');
+        const pulsante = document.getElementById('pulsante-avvio');
+        const avviso = document.getElementById('avviso-landscape');
+
+        // Stato del Gioco
+        let orsetto = { x: 150, y: window.innerHeight / 2, raggioBase: 40, raggioAttuale: 40 };
+        let caramelle = [];
+        let punteggio = 0;
+        let giocoAvviato = false;
+        let timerCaramelle = 0;
+
+        let audioContext, analyser, dataArray;
+
+        function controllaOrientamento() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (window.innerHeight > window.innerWidth) {
+                avviso.style.display = "flex";
+            } else {
+                avviso.style.display = "none";
+                if (orsetto.y > canvas.height) orsetto.y = canvas.height / 2;
+            }
+        }
+
+        window.addEventListener('resize', controllaOrientamento);
+        window.addEventListener('orientationchange', () => { setTimeout(controllaOrientamento, 300); });
+        controllaOrientamento();
+
+        pulsante.addEventListener('click', async () => {
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(() => {});
+            }
+            pulsante.style.display = 'none';
+            await inizializzaAudio();
+            giocoAvviato = true;
+            loopPrincipale();
+        });
+
+        async function inizializzaAudio() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const sorgente = audioContext.createMediaStreamSource(stream);
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 2048;
+                sorgente.connect(analyser);
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+            } catch (err) {
+                alert("Attenzione! Serve il microfono per far volare l'orsetto!");
+            }
+        }
+
+        function analizzaAudio() {
+            if (!analyser) return { volume: 0, frequenza: 0 };
+            analyser.getByteFrequencyData(dataArray);
+            let volumeMassimo = 0, indiceFrequenzaMassima = 0;
+
+            for (let i = 0; i < dataArray.length; i++) {
+                if (dataArray[i] > volumeMassimo) {
+                    volumeMassimo = dataArray[i];
+                    indiceFrequenzaMassima = i;
+                }
+            }
+            return {
+                volume: volumeMassimo / 255,
+                frequenza: indiceFrequenzaMassima * audioContext.sampleRate / analyser.fftSize
+            };
+        }
+
+        // Funzione per disegnare l'orsetto usando i cerchi
+        function disegnaOrsetto(x, y, r) {
+            ctx.save();
+            
+            // 1. ORECCHIE
+            ctx.fillStyle = "#8B4513"; // Marrone orsetto
+            ctx.beginPath();
+            ctx.arc(x - r * 0.7, y - r * 0.7, r * 0.35, 0, Math.PI * 2); // Orecchia sx
+            ctx.arc(x + r * 0.7, y - r * 0.7, r * 0.35, 0, Math.PI * 2); // Orecchia dx
+            ctx.fill();
+            
+            ctx.fillStyle = "#FFB6C1"; // Rosa interno orecchie
+            ctx.beginPath();
+            ctx.arc(x - r * 0.7, y - r * 0.7, r * 0.18, 0, Math.PI * 2);
+            ctx.arc(x + r * 0.7, y - r * 0.7, r * 0.18, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 2. TESTA PRINCIPALE
+            ctx.fillStyle = "#A0522D"; // Marrone chiaro/scuro
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 3. MUSETTO BIANCESTRO
+            ctx.fillStyle = "#FFF8DC"; 
+            ctx.beginPath();
+            ctx.arc(x, y + r * 0.2, r * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 4. NASINO NERO
+            ctx.fillStyle = "#000000";
+            ctx.beginPath();
+            ctx.arc(x, y + r * 0.05, r * 0.12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 5. OCCHIETTI
+            ctx.fillStyle = "#000000";
+            ctx.beginPath();
+            ctx.arc(x - r * 0.3, y - r * 0.2, r * 0.08, 0, Math.PI * 2); // Occhio sx
+            ctx.arc(x + r * 0.3, y - r * 0.2, r * 0.08, 0, Math.PI * 2); // Occhio dx
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // Funzione per disegnare una caramella colorata incartata
+        function disegnaCaramella(x, y, colore) {
+            ctx.save();
+            ctx.fillStyle = colore;
+
+            // Fiocchetti laterali dell'incarto (Triangoli)
+            ctx.beginPath();
+            ctx.moveTo(x - 25, y - 10);
+            ctx.lineTo(x - 25, y + 10);
+            ctx.lineTo(x, y);
+            ctx.moveTo(x + 25, y - 10);
+            ctx.lineTo(x + 25, y + 10);
+            ctx.lineTo(x, y);
+            ctx.fill();
+
+            // Corpo centrale della caramella (Ovale/Cerchio)
+            ctx.beginPath();
+            ctx.arc(x, y, 14, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Decorazione bianca interna
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(x, y, 7, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function loopPrincipale() {
+            if (!giocoAvviato) return;
+
+            // Sfondo azzurro pulito ad ogni frame
+            ctx.fillStyle = "#87CEEB";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            let datiAudio = analizzaAudio();
+
+            // 1. MODIFICA GRANDEZZA ORSETTO (Volume della voce)
+            orsetto.raggioAttuale = orsetto.raggioBase + (datiAudio.volume * 90);
+
+            // 2. MODIFICA ALTEZZA ORSETTO (Frequenza/Tono della voce)
+            if (datiAudio.volume > 0.08) { // Attivo se il bambino parla/canta
+                let fattoreScala = canvas.height / 500;
+                let bersaglioY = canvas.height - (datiAudio.frequenza * fattoreScala);
+                // Evitiamo che l'orsetto esca dallo schermo
+                bersaglioY = Math.max(orsetto.raggioAttuale, Math.min(canvas.height - orsetto.raggioAttuale, bersaglioY));
+                orsetto.y += (bersaglioY - orsetto.y) * 0.15; // Inerzia per renderlo fluido
+            }
+
+            // 3. GENERAZIONE DELLE CARAMELLE (Una nuova caramella ogni circa 2 secondi)
+            timerCaramelle++;
+            if (timerCaramelle > 120) {
+                let colori = ['#FF1493', '#00FF00', '#FFD700', '#FF4500', '#9400D3'];
+                let coloreCasuale = colori[Math.floor(Math.random() * colori.length)];
+                
+                caramelle.push({
+                    x: canvas.width + 30,
+                    y: Math.random() * (canvas.height - 100) + 50,
+                    velocita: Math.random() * 2 + 1.5, // Velocità della caramella verso sinistra
+                    colore: coloreCasuale
+                });
+                timerCaramelle = 0;
+            }
+
+            // 4. GESTIONE E DISEGNO CARAMELLE
+            for (let i = caramelle.length - 1; i >= 0; i--) {
+                let c = caramelle[i];
+                c.x -= c.velocita; // Muove la caramella verso l'orsetto
+
+                disegnaCaramella(c.x, c.y, c.colore);
+
+                // CONTROLLO COLLISIONE: L'orsetto mangia la caramella?
+                let distanzaX = orsetto.x - c.x;
+                let distanzaY = orsetto.y - c.y;
+                let distanza = Math.sqrt(distanzaX * distanzaX + distanceY * distanceY);
+
+                // Se la caramella entra nel raggio della testa dell'orsetto... Gnam!
+                if (distanza < orsetto.raggioAttuale + 15) {
+                    punteggio += 1;
+                    caramelle.splice(i, 1); // Rimuove la caramella mangiata
+                    continue;
+                }
+
+                // Rimuove le caramelle se escono dallo schermo a sinistra per non rallentare il telefono
+                if (c.x < -30) {
+                    caramelle.splice(i, 1);
+                }
+            }
+
+            // 5. DISEGNA L'ORSETTO
+            disegnaOrsetto(orsetto.x, orsetto.y, orsetto.raggioAttuale);
+
+            // 6. SCRIVI IL PUNTEGGIO SULLO SCHERMO
+            ctx.fillStyle = "white";
+            ctx.font = "bold 32px 'Arial Rounded MT Bold', Arial";
+            ctx.strokeStyle = "#4A2711";
+            ctx.lineWidth = 5;
+            ctx.strokeText("Caramelle Mangiate: " + punteggio, 20, 50);
+            ctx.fillText("Caramelle Mangiate: " + punteggio, 20, 50);
+
+            requestAnimationFrame(loopPrincipale);
+        }
+    </script>
+</body>
+</html>
