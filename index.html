@@ -278,4 +278,163 @@
                 let guadagno = audioContext.createGain();
                 osc.type = 'triangle';
                 osc.frequency.setValueAtTime(300, audioContext.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(
+                osc.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.15);
+                guadagno.gain.setValueAtTime(0.3, audioContext.currentTime);
+                guadagno.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+                osc.connect(guadagno); guadagno.connect(audioContext.destination);
+                osc.start(); osc.stop(audioContext.currentTime + 0.15);
+            });
+        }
+
+        function analizzaAudio() {
+            if (!analyser) return { volume: 0, frequenza: 0 };
+            analyser.getByteFrequencyData(dataArray);
+            let volumeMassimo = 0, indiceFrequenzaMassima = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                if (dataArray[i] > volumeMassimo) {
+                    volumeMassimo = dataArray[i];
+                    indiceFrequenzaMassima = i;
+                }
+            }
+            return {
+                volume: volumeMassimo / 255,
+                frequenza: indiceFrequenzaMassima * audioContext.sampleRate / analyser.fftSize
+            };
+        }
+
+        function disegnaOrsettoCompleto(x, y, r) {
+            ctx.save();
+            let oscillazione = Math.sin(tempoAnimazione) * (r * 0.4);
+
+            ctx.fillStyle = "#8B4513";
+            ctx.beginPath(); ctx.arc(x - r * 0.4 + oscillazione, y - r * 0.8, r * 0.3, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x - r * 0.4 - oscillazione, y + r * 0.8, r * 0.3, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + r * 0.6 - oscillazione, y - r * 0.6, r * 0.28, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(x + r * 0.6 + oscillazione, y + r * 0.6, r * 0.28, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = "#A0522D";
+            ctx.beginPath(); ctx.ellipse(x, y, r * 1.2, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = "#8B4513";
+            ctx.beginPath(); ctx.arc(x - r * 0.5, y - r * 1.3, r * 0.3, 0, Math.PI * 2); ctx.arc(x + r * 0.3, y - r * 1.3, r * 0.3, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "#FFB6C1";
+            ctx.beginPath(); ctx.arc(x - r * 0.5, y - r * 1.3, r * 0.15, 0, Math.PI * 2); ctx.arc(x + r * 0.3, y - r * 1.3, r * 0.15, 0, Math.PI * 2); ctx.fill();
+
+            if (indiceFacciaAttuale >= 0 && facceBambini[indiceFacciaAttuale]) {
+                let imgBimbo = facceBambini[indiceFacciaAttuale].img;
+                let dimTesta = r * 1.6;
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(x - r * 0.2, y - r * 0.6, r * 0.8, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(imgBimbo, x - r * 0.2 - r * 0.8, y - r * 0.6 - r * 0.8, dimTesta, dimTesta);
+                ctx.restore();
+            } else {
+                ctx.fillStyle = "#A0522D";
+                ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.6, r * 0.8, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "#FFF8DC";
+                ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.4, r * 0.35, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "#000000";
+                ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.5, r * 0.1, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x - r * 0.4, y - r * 0.8, r * 0.08, 0, Math.PI * 2); ctx.arc(x + r * 0.0, y - r * 0.8, r * 0.08, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        function disegnaCaramella(x, y, colore) {
+            ctx.save(); ctx.fillStyle = colore; ctx.beginPath();
+            ctx.moveTo(x - 22, y - 8); ctx.lineTo(x - 22, y + 8); ctx.lineTo(x, y);
+            ctx.moveTo(x + 22, y - 8); ctx.lineTo(x + 22, y + 8); ctx.lineTo(x, y); ctx.fill();
+            ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+        }
+
+        function disegnaChupaChups(x, y) {
+            ctx.save(); ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 5; ctx.lineCap = "round";
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 25, y + 25); ctx.stroke();
+            let gradiente = ctx.createRadialGradient(x - 5, y - 5, 2, x, y, 22);
+            gradiente.addColorStop(0, '#FFFFFF'); gradiente.addColorStop(0.3, '#FF007F'); gradiente.addColorStop(0.8, '#FFD700');
+            ctx.fillStyle = gradiente; ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.beginPath(); ctx.arc(x - 6, y - 6, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+        }
+
+        function loopPrincipale() {
+            if (!giocoAvviato) return;
+
+            if (timerFlash > 0) {
+                ctx.fillStyle = "#FFD700";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                timerFlash--;
+            } else if (sfondoCaricato) {
+                ctx.drawImage(sfondoImg, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = "#5F9EA0";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            let datiAudio = analizzaAudio();
+
+            if (GRANDEZZA_REATTIVA) {
+                orsetto.raggioAttuale = orsetto.raggioBase + (datiAudio.volume * 80);
+            } else {
+                orsetto.raggioAttuale = orsetto.raggioBase;
+            }
+            tempoAnimazione += 0.2;
+
+            if (datiAudio.volume > 0.08) {
+                let freqBloccata = Math.max(FREQ_MIN, min(FREQ_MAX, datiAudio.frequenza));
+                let percentuale = (freqBloccata - FREQ_MIN) / (FREQ_MAX - FREQ_MIN);
+                let bersaglioY = canvas.height - (percentuale * (canvas.height - orsetto.raggioAttuale * 2)) - orsetto.raggioAttuale;
+                orsetto.y += (bersaglioY - orsetto.y) * 0.12;
+            }
+
+            // GENERAZIONE CARAMELLE DINAMICA (Legata al parametro SPAWN_RITMO)
+            timerCaramelle++;
+            if (timerCaramelle > SPAWN_RITMO) {
+                let tipoChupa = Math.random() < 0.15;
+                let colori = ['#FF1493', '#00FF00', '#FFD700', '#FF4500', '#9400D3'];
+                caramelle.push({
+                    x: canvas.width + 40,
+                    y: Math.random() * (canvas.height - 140) + 70,
+                    velocita: (Math.random() * 1.5 + 1) * (VELOCITA_MOLTIPLICATORE / 3),
+                    colore: colori[Math.floor(Math.random() * colori.length)],
+                    isSuper: tipoChupa
+                });
+                if (tipoChupa) timerFlash = 8;
+                timerCaramelle = 0;
+            }
+
+            for (let i = caramelle.length - 1; i >= 0; i--) {
+                let c = caramelle[i];
+                c.x -= c.velocita * (VELOCITA_MOLTIPLICATORE / 2);
+
+                if (c.isSuper) disegnaChupaChups(c.x, c.y);
+                else disegnaCaramella(c.x, c.y, c.colore);
+
+                let distX = orsetto.x - c.x; let distY = orsetto.y - c.y;
+                let distanza = Math.sqrt(distX * distX + distY * distY);
+                let raggioCollisione = c.isSuper ? (orsetto.raggioAttuale + 26) : (orsetto.raggioActual || orsetto.raggioAttuale + 20);
+
+                if (distanza < raggioCollisione) {
+                    punteggio += c.isSuper ? 5 : 1;
+                    playSuonoGnam();
+                    caramelle.splice(i, 1);
+                    continue;
+                }
+                if (c.x < -40) caramelle.splice(i, 1);
+            }
+
+            disegnaOrsettoCompleto(orsetto.x, orsetto.y, orsetto.raggioAttuale);
+
+            // Punteggio spostato a destra per non sovrapporsi mai al tasto menu
+            ctx.fillStyle = "white"; ctx.font = "bold 30px Arial"; ctx.strokeStyle = "#2F4F4F"; ctx.lineWidth = 5;
+            ctx.strokeText("Punti: " + punteggio, canvas.width - 180, 40); 
+            ctx.fillText("Punti: " + punteggio, canvas.width - 180, 40);
+
+            requestAnimationFrame(loopPrincipale);
+        }
+    </script>
+</body>
+</html>
