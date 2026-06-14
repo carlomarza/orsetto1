@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>L'Orsetto Nuotatore Vocale</title>
+    <title>L'Orsetto Nuotatore Vocale - Deluxe Touch</title>
     <style>
         body {
             margin: 0;
@@ -33,20 +33,22 @@
             box-shadow: 0 10px 20px rgba(0,0,0,0.2);
             z-index: 30;
         }
+        /* Pannello di Controllo Touch per Android */
         #pannello-controllo {
             position: absolute;
-            bottom: 15px; left: 15px;
-            background-color: rgba(0, 0, 0, 0.6);
-            padding: 12px;
+            bottom: 10px; left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
             border-radius: 15px;
-            font-size: 14px;
+            font-size: 13px;
             z-index: 10;
             display: none;
             backdrop-filter: blur(5px);
             border: 2px solid rgba(255,255,255,0.2);
+            max-width: 280px;
         }
         .controllo-gruppo {
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .controllo-gruppo label {
             display: block;
@@ -54,7 +56,20 @@
             color: #00ffcc;
         }
         .controllo-gruppo input {
-            width: 150px;
+            width: 100%;
+        }
+        .btn-touch {
+            background-color: #4682B4;
+            color: white;
+            border: 2px solid white;
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+            margin-top: 4px;
+            width: 100%;
+            display: block;
         }
         #avviso-landscape {
             display: none;
@@ -67,22 +82,11 @@
             align-items: center;
             text-align: center;
         }
-        .icona-ruota {
-            width: 60px; height: 60px;
-            border: 4px solid white; border-radius: 10px;
-            animation: ruota 2s infinite ease-in-out;
-        }
-        @keyframes ruota {
-            0% { transform: rotate(0deg); }
-            50% { transform: rotate(90deg); }
-            100% { transform: rotate(90deg); }
-        }
     </style>
 </head>
 <body>
 
     <div id="avviso-landscape">
-        <div class="icona-ruota"></div>
         <p style="font-size: 24px;">Gira il dispositivo in Orizzontale!<br><small>Attiva la rotazione automatica</small></p>
     </div>
 
@@ -97,6 +101,17 @@
             <label>Voce Acuta (Max): <span id="val-max">800</span> Hz</label>
             <input type="range" id="freq-max" min="400" max="2000" value="800">
         </div>
+        <div class="controllo-gruppo">
+            <label>Velocità Caramelle: <span id="val-vel">3</span></label>
+            <input type="range" id="vel-caramelle" min="1" max="10" step="0.5" value="3">
+        </div>
+        <div class="controllo-gruppo">
+            <label>Dimensione Base Orso: <span id="val-size">35</span></label>
+            <input type="range" id="size-orso" min="15" max="80" value="35">
+        </div>
+        
+        <button class="btn-touch" id="btn-toggle-reattivo">Grandezza Vocale: SI</button>
+        <button class="btn-touch" id="btn-cambia-faccia" style="background-color: #FF8C00;">🎭 Cambia Faccia (Orsetto)</button>
     </div>
 
     <canvas id="quadroGioco"></canvas>
@@ -110,23 +125,76 @@
 
         const sliderMin = document.getElementById('freq-min');
         const sliderMax = document.getElementById('freq-max');
+        const sliderVel = document.getElementById('vel-caramelle');
+        const sliderSize = document.getElementById('size-orso');
+        
         const txtMin = document.getElementById('val-min');
         const txtMax = document.getElementById('val-max');
+        const txtVel = document.getElementById('val-vel');
+        const txtSize = document.getElementById('val-size');
+        
+        const btnToggleReattivo = document.getElementById('btn-toggle-reattivo');
+        const btnCambiaFaccia = document.getElementById('btn-cambia-faccia');
 
+        // Parametri di calibrazione
         let FREQ_MIN = 150;
         let FREQ_MAX = 800;
+        let VELOCITA_MOLTIPLICATORE = 3.0;
+        let GRANDEZZA_BASE = 35;
+        let GRANDEZZA_REATTIVA = true;
 
+        // Gestione facce bambini
+        let facceBambini = []; // Conterrà gli oggetti Image() caricati
+        let indiceFacciaAttuale = -1; // -1 = Orsetto normale
+        let nomiFacce = ["Orsetto Classico", "Bambino 1", "Bambino 2", "Bambino 3"];
+
+        // Pre-carichiamo 3 immagini di bambini (devono essere caricate nella stessa repository di GitHub!)
+        for (let i = 1; i <= 3; i++) {
+            let img = new Image();
+            img.src = `bambino${i}.png`; // supporta anche .jpg se li rinomini nel codice
+            img.onload = () => { facceBambini.push({ id: i, img: img }); };
+        }
+
+        // Ascoltatori dei controlli Touch
         sliderMin.addEventListener('input', (e) => { FREQ_MIN = parseInt(e.target.value); txtMin.innerText = FREQ_MIN; });
         sliderMax.addEventListener('input', (e) => { FREQ_MAX = parseInt(e.target.value); txtMax.innerText = FREQ_MAX; });
+        sliderVel.addEventListener('input', (e) => { VELOCITA_MOLTIPLICATORE = parseFloat(e.target.value); txtVel.innerText = VELOCITA_MOLTIPLICATORE; });
+        sliderSize.addEventListener('input', (e) => { GRANDEZZA_BASE = parseInt(e.target.value); txtSize.innerText = GRANDEZZA_BASE; orsetto.raggioBase = GRANDEZZA_BASE; });
 
+        btnToggleReattivo.addEventListener('click', () => {
+            GRANDEZZA_REATTIVA = !GRANDEZZA_REATTIVA;
+            btnToggleReattivo.innerText = GRANDEZZA_REATTIVA ? "Grandezza Vocale: SI" : "Grandezza Vocale: NO";
+            btnToggleReattivo.style.backgroundColor = GRANDEZZA_REATTIVA ? "#4682B4" : "#808080";
+        });
+
+        btnCambiaFaccia.addEventListener('click', () => {
+            if (facceBambini.length === 0) {
+                alert("Nessuna foto 'bambino1.png' trovata nella cartella GitHub. Caricale per vederle qui!");
+                return;
+            }
+            indiceFacciaAttuale++;
+            if (indiceFacciaAttuale >= facceBambini.length) {
+                indiceFacciaAttuale = -1; // Torna all'orso standard
+            }
+            btnCambiaFaccia.innerText = "🎭 Faccia: " + (indiceFacciaAttuale === -1 ? "Orsetto" : `Bambino ${facceBambini[indiceFacciaAttuale].id}`);
+        });
+
+        // Stato del Gioco
         let orsetto = { x: 180, y: window.innerHeight / 2, raggioBase: 35, raggioAttuale: 35 };
         let caramelle = [];
         let punteggio = 0;
         let giocoAvviato = false;
         let timerCaramelle = 0;
         let tempoAnimazione = 0;
+        let timerFlash = 0;
 
         let audioContext, analyser, dataArray;
+
+        // Immagine di sfondo opzionale per internet
+        let sfondoImg = new Image();
+        let sfondoCaricato = false;
+        sfondoImg.src = "sfondo.jpg";
+        sfondoImg.onload = () => { sfondoCaricato = true; };
 
         function controllaOrientamento() {
             canvas.width = window.innerWidth;
@@ -164,30 +232,27 @@
                 sorgente.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
             } catch (err) {
-                alert("Sblocca il microfono per far nuotare l'orsetto!");
+                alert("Sblocca il microfono per giocare!");
             }
         }
 
-        // CORREZIONE QUI: Cambiato 'def' con 'function' (Sintassi corretta JavaScript)
+        // Suono gnam.wav o gnam.mp3 per il browser (caricabile opzionalmente nella repo)
+        let audioGnam = new Audio('gnam.wav');
+
         function playSuonoGnam() {
-            if (!audioContext) return;
-            
-            let osc = audioContext.createOscillator();
-            let guadagno = audioContext.createGain();
-            
-            osc.type = 'triangle';
-            
-            osc.frequency.setValueAtTime(300, audioContext.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.15);
-            
-            guadagno.gain.setValueAtTime(0.3, audioContext.currentTime);
-            guadagno.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
-            
-            osc.connect(guadagno);
-            guadagno.connect(audioContext.destination);
-            
-            osc.start();
-            osc.stop(audioContext.currentTime + 0.15);
+            // Se hai caricato gnam.wav su GitHub suonerà il file reale, altrimenti usa il sintetizzatore di riserva
+            audioGnam.play().catch(() => {
+                if (!audioContext) return;
+                let osc = audioContext.createOscillator();
+                let guadagno = audioContext.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, audioContext.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.15);
+                guadagno.gain.setValueAtTime(0.3, audioContext.currentTime);
+                guadagno.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+                osc.connect(guadagno); guadagno.connect(audioContext.destination);
+                osc.start(); osc.stop(audioContext.currentTime + 0.15);
+            });
         }
 
         function analizzaAudio() {
@@ -209,82 +274,94 @@
 
         function disegnaOrsettoCompleto(x, y, r) {
             ctx.save();
-            
             let oscillazione = Math.sin(tempoAnimazione) * (r * 0.4);
 
-            // Zampine
+            // Zampine e Corpo
             ctx.fillStyle = "#8B4513";
             ctx.beginPath(); ctx.arc(x - r * 0.4 + oscillazione, y - r * 0.8, r * 0.3, 0, Math.PI * 2); ctx.fill();
             ctx.beginPath(); ctx.arc(x - r * 0.4 - oscillazione, y + r * 0.8, r * 0.3, 0, Math.PI * 2); ctx.fill();
             ctx.beginPath(); ctx.arc(x + r * 0.6 - oscillazione, y - r * 0.6, r * 0.28, 0, Math.PI * 2); ctx.fill();
             ctx.beginPath(); ctx.arc(x + r * 0.6 + oscillazione, y + r * 0.6, r * 0.28, 0, Math.PI * 2); ctx.fill();
 
-            // Corpo
             ctx.fillStyle = "#A0522D";
-            ctx.beginPath();
-            ctx.ellipse(x, y, r * 1.2, r * 0.8, 0, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.beginPath(); ctx.ellipse(x, y, r * 1.2, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
 
             // Orecchie
             ctx.fillStyle = "#8B4513";
-            ctx.beginPath();
-            ctx.arc(x - r * 0.5, y - r * 1.3, r * 0.3, 0, Math.PI * 2);
-            ctx.arc(x + r * 0.3, y - r * 1.3, r * 0.3, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(x - r * 0.5, y - r * 1.3, r * 0.3, 0, Math.PI * 2); ctx.arc(x + r * 0.3, y - r * 1.3, r * 0.3, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = "#FFB6C1";
-            ctx.beginPath();
-            ctx.arc(x - r * 0.5, y - r * 1.3, r * 0.15, 0, Math.PI * 2);
-            ctx.arc(x + r * 0.3, y - r * 1.3, r * 0.15, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(x - r * 0.5, y - r * 1.3, r * 0.15, 0, Math.PI * 2); ctx.arc(x + r * 0.3, y - r * 1.3, r * 0.15, 0, Math.PI * 2); ctx.fill();
 
-            // Testa
-            ctx.fillStyle = "#A0522D";
-            ctx.beginPath();
-            ctx.arc(x - r * 0.2, y - r * 0.6, r * 0.8, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Muso
-            ctx.fillStyle = "#FFF8DC";
-            ctx.beginPath();
-            ctx.arc(x - r * 0.2, y - r * 0.4, r * 0.35, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = "#000000";
-            ctx.beginPath();
-            ctx.arc(x - r * 0.2, y - r * 0.5, r * 0.1, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Occhi
-            ctx.fillStyle = "#000000";
-            ctx.beginPath();
-            ctx.arc(x - r * 0.4, y - r * 0.8, r * 0.08, 0, Math.PI * 2);
-            ctx.arc(x + r * 0.0, y - r * 0.8, r * 0.08, 0, Math.PI * 2);
-            ctx.fill();
+            // GESTIONE CORGENTE FACCIA BAMBINO (Ritaglio Circolare HTML5)
+            if (indiceFacciaAttuale >= 0 && facceBambini[indiceFacciaAttuale]) {
+                let imgBimbo = facceBambini[indiceFacciaAttuale].img;
+                let dimTesta = r * 1.6;
+                
+                ctx.save();
+                // Creiamo un cerchio di ritaglio invisibile sopra il muso
+                ctx.beginPath();
+                ctx.arc(x - r * 0.2, y - r * 0.6, r * 0.8, 0, Math.PI * 2);
+                ctx.clip();
+                // Incolliamo la foto quadrata dentro il cerchio ritagliato
+                ctx.drawImage(imgBimbo, x - r * 0.2 - r * 0.8, y - r * 0.6 - r * 0.8, dimTesta, dimTesta);
+                ctx.restore();
+            } else {
+                // Testa dell'Orsetto standard
+                ctx.fillStyle = "#A0522D";
+                ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.6, r * 0.8, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "#FFF8DC";
+                ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.4, r * 0.35, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = "#000000";
+                ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.5, r * 0.1, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x - r * 0.4, y - r * 0.8, r * 0.08, 0, Math.PI * 2); ctx.arc(x + r * 0.0, y - r * 0.8, r * 0.08, 0, Math.PI * 2); ctx.fill();
+            }
 
             ctx.restore();
         }
 
         function disegnaCaramella(x, y, colore) {
-            ctx.save();
-            ctx.fillStyle = colore;
-            ctx.beginPath();
+            ctx.save(); ctx.fillStyle = colore; ctx.beginPath();
             ctx.moveTo(x - 22, y - 8); ctx.lineTo(x - 22, y + 8); ctx.lineTo(x, y);
-            ctx.moveTo(x + 22, y - 8); ctx.lineTo(x + 22, y + 8); ctx.lineTo(x, y);
-            ctx.fill();
+            ctx.moveTo(x + 22, y - 8); ctx.lineTo(x + 22, y + 8); ctx.lineTo(x, y); ctx.fill();
             ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = "white"; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.stroke();
+            ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+        }
+
+        function disegnaChupaChups(x, y) {
+            ctx.save(); ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 5; ctx.lineCap = "round";
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 25, y + 25); ctx.stroke();
+            let gradiente = ctx.createRadialGradient(x - 5, y - 5, 2, x, y, 22);
+            gradiente.addColorStop(0, '#FFFFFF'); gradiente.addColorStop(0.3, '#FF007F'); gradiente.addColorStop(0.8, '#FFD700');
+            ctx.fillStyle = gradiente; ctx.beginPath(); ctx.arc(x, y, 22, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.beginPath(); ctx.arc(x - 6, y - 6, 6, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
         }
 
         function loopPrincipale() {
             if (!giocoAvviato) return;
 
-            ctx.fillStyle = "#5F9EA0"; 
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Gestione Sfondo / Effetto Visivo Flash
+            if (timerFlash > 0) {
+                ctx.fillStyle = "#FFD700"; // Flash Giallo Oro
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                timerFlash--;
+            } else if (sfondoCaricato) {
+                ctx.drawImage(sfondoImg, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = "#5F9EA0";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
 
             let datiAudio = analizzaAudio();
 
-            orsetto.raggioAttuale = orsetto.raggioBase + (datiAudio.volume * 80);
+            // Calcolo grandezza basato sul toggle touch
+            if (GRANDEZZA_REATTIVA) {
+                orsetto.raggioAttuale = orsetto.raggioBase + (datiAudio.volume * 80);
+            } else {
+                orsetto.raggioAttuale = orsetto.raggioBase;
+            }
+            
             tempoAnimazione += 0.2;
 
             if (datiAudio.volume > 0.08) {
@@ -294,46 +371,47 @@
                 orsetto.y += (bersaglioY - orsetto.y) * 0.12;
             }
 
+            // Generazione caramelle
             timerCaramelle++;
-            if (timerCaramelle > 100) {
+            if (timerCaramelle > 90) {
+                let tipoChupa = Math.random() < 0.15;
                 let colori = ['#FF1493', '#00FF00', '#FFD700', '#FF4500', '#9400D3'];
                 caramelle.push({
-                    x: canvas.width + 30,
-                    y: Math.random() * (canvas.height - 120) + 60,
-                    velocita: Math.random() * 2 + 2,
-                    colore: colori[Math.floor(Math.random() * colori.length)]
+                    x: canvas.width + 40,
+                    y: Math.random() * (canvas.height - 140) + 70,
+                    velocita: (Math.random() * 1.5 + 1) * (VELOCITA_MOLTIPLICATORE / 3),
+                    colore: colori[Math.floor(Math.random() * colori.length)],
+                    isSuper: tipoChupa
                 });
+                if (tipoChupa) timerFlash = 8; // Attiva l'effetto visivo flash lampo
                 timerCaramelle = 0;
             }
 
             for (let i = caramelle.length - 1; i >= 0; i--) {
                 let c = caramelle[i];
-                c.x -= c.velocita;
+                c.x -= c.velocita * (VELOCITA_MOLTIPLICATORE / 2);
 
-                disegnaCaramella(c.x, c.y, c.colore);
+                if (c.isSuper) disegnaChupaChups(c.x, c.y);
+                else disegnaCaramella(c.x, c.y, c.colore);
 
-                let distX = orsetto.x - c.x;
-                let distY = orsetto.y - c.y;
+                let distX = orsetto.x - c.x; let distY = orsetto.y - c.y;
                 let distanza = Math.sqrt(distX * distX + distY * distY);
+                let raggioCollisione = c.isSuper ? (orsetto.raggioAttuale + 26) : (orsetto.raggioAttuale + 20);
 
-                if (distanza < orsetto.raggioAttuale + 20) {
-                    punteggio += 1;
-                    playSuonoGnam(); 
+                if (distanza < raggioCollisione) {
+                    punteggio += c.isSuper ? 5 : 1;
+                    playSuonoGnam();
                     caramelle.splice(i, 1);
                     continue;
                 }
-
-                if (c.x < -30) caramelle.splice(i, 1);
+                if (c.x < -40) caramelle.splice(i, 1);
             }
 
             disegnaOrsettoCompleto(orsetto.x, orsetto.y, orsetto.raggioAttuale);
 
-            ctx.fillStyle = "white";
-            ctx.font = "bold 30px Arial";
-            ctx.strokeStyle = "#2F4F4F";
-            ctx.lineWidth = 5;
-            ctx.strokeText("Punti: " + punteggio, 20, 50);
-            ctx.fillText("Punti: " + punteggio, 20, 50);
+            // Testo Punteggio con ombra
+            ctx.fillStyle = "white"; ctx.font = "bold 30px Arial"; ctx.strokeStyle = "#2F4F4F"; ctx.lineWidth = 5;
+            ctx.strokeText("Punti: " + punteggio, 20, 40); ctx.fillText("Punti: " + punteggio, 20, 40);
 
             requestAnimationFrame(loopPrincipale);
         }
