@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>L'Orsetto Mangia-Caramelle Vocale</title>
+    <title>L'Orsetto Nuotatore Vocale</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #87CEEB; /* Sfondo azzurro cielo per i bambini */
+            background-color: #87CEEB;
             font-family: 'Arial Rounded MT Bold', Arial, sans-serif;
             color: white;
             user-select: none;
@@ -20,37 +20,57 @@
         }
         #pulsante-avvio {
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             padding: 20px 40px;
             font-size: 22px;
             cursor: pointer;
-            background-color: #FF69B4; /* Rosa confetto */
+            background-color: #FF69B4;
             color: white;
             border: 4px solid white;
             border-radius: 50px;
             font-weight: bold;
             box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            z-index: 30;
+        }
+        /* Pannello di Controllo Frequenze */
+        #pannello-controllo {
+            position: absolute;
+            bottom: 15px; left: 15px;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 12px;
+            border-radius: 15px;
+            font-size: 14px;
+            z-index: 10;
+            display: none;
+            backdrop-filter: blur(5px);
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+        .controllo-gruppo {
+            margin-bottom: 8px;
+        }
+        .controllo-gruppo label {
+            display: block;
+            margin-bottom: 2px;
+            color: #00ffcc;
+        }
+        .controllo-gruppo input {
+            width: 150px;
         }
         #avviso-landscape {
             display: none;
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
             background-color: #87CEEB;
-            z-index: 20;
+            z-index: 40;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             text-align: center;
-            padding: 20px;
-            box-sizing: border-box;
         }
         .icona-ruota {
-            width: 60px;
-            height: 60px;
-            border: 4px solid white;
-            border-radius: 10px;
+            width: 60px; height: 60px;
+            border: 4px solid white; border-radius: 10px;
             animation: ruota 2s infinite ease-in-out;
         }
         @keyframes ruota {
@@ -64,10 +84,22 @@
 
     <div id="avviso-landscape">
         <div class="icona-ruota"></div>
-        <p style="font-size: 24px;">Gira il telefono di lato!<br><small>Attiva la rotazione automatica</small></p>
+        <p style="font-size: 24px;">Gira il dispositivo in Orizzontale!<br><small>Attiva la rotazione automatica</small></p>
     </div>
 
-    <button id="pulsante-avvio">🐻 CLICCA QUI PER GIOCARE! 🍭</button>
+    <button id="pulsante-avvio">🐻 ENTRA NEL MARE DELLE CARAMELLE! 🍭</button>
+
+    <div id="pannello-controllo">
+        <div class="controllo-gruppo">
+            <label>Voce Grave (Min): <span id="val-min">150</span> Hz</label>
+            <input type="range" id="freq-min" min="60" max="400" value="150">
+        </div>
+        <div class="controllo-gruppo">
+            <label>Voce Acuta (Max): <span id="val-max">800</span> Hz</label>
+            <input type="range" id="freq-max" min="400" max="2000" value="800">
+        </div>
+    </div>
+
     <canvas id="quadroGioco"></canvas>
 
     <script>
@@ -75,13 +107,29 @@
         const ctx = canvas.getContext('2d');
         const pulsante = document.getElementById('pulsante-avvio');
         const avviso = document.getElementById('avviso-landscape');
+        const pannello = document.getElementById('pannello-controllo');
+
+        // Cursori HTML
+        const sliderMin = document.getElementById('freq-min');
+        const sliderMax = document.getElementById('freq-max');
+        const txtMin = document.getElementById('val-min');
+        const txtMax = document.getElementById('val-max');
+
+        // Range di Frequenza Personalizzabili (Modificabili in tempo reale dagli slider)
+        let FREQ_MIN = 150;
+        let FREQ_MAX = 800;
+
+        // Aggiorna i valori quando si muovono i cursori
+        sliderMin.addEventListener('input', (e) => { FREQ_MIN = parseInt(e.target.value); txtMin.innerText = FREQ_MIN; });
+        sliderMax.addEventListener('input', (e) => { FREQ_MAX = parseInt(e.target.value); txtMax.innerText = FREQ_MAX; });
 
         // Stato del Gioco
-        let orsetto = { x: 150, y: window.innerHeight / 2, raggioBase: 40, raggioAttuale: 40 };
+        let orsetto = { x: 180, y: window.innerHeight / 2, raggioBase: 35, raggioAttuale: 35 };
         let caramelle = [];
         let punteggio = 0;
         let giocoAvviato = false;
         let timerCaramelle = 0;
+        let tempoAnimazione = 0; // Serve per far muovere le zampe a ritmo di nuoto
 
         let audioContext, analyser, dataArray;
 
@@ -105,6 +153,7 @@
                 screen.orientation.lock('landscape').catch(() => {});
             }
             pulsante.style.display = 'none';
+            pannello.style.display = 'block'; // Mostra i cursori di calibrazione
             await inizializzaAudio();
             giocoAvviato = true;
             loopPrincipale();
@@ -120,8 +169,33 @@
                 sorgente.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
             } catch (err) {
-                alert("Attenzione! Serve il microfono per far volare l'orsetto!");
+                alert("Sblocca il microfono per far nuotare l'orsetto!");
             }
+        }
+
+        // FUNZIONE SUONO: Genera un simpatico "Bleep" stile videogioco
+        def playSuonoGnam() {
+            if (!audioContext) return;
+            
+            // Crea un oscillatore (generatore di onde sonore)
+            let osc = audioContext.createOscillator();
+            let guadagno = audioContext.createGain(); // Controlla il volume del suono
+            
+            osc.type = 'triangle'; // Tipo di onda dolce, adatta ai bambini
+            
+            // Il suono parte da una nota e sale velocemente verso l'alto (effetto gnam/salto)
+            osc.frequency.setValueAtTime(300, audioContext.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.15);
+            
+            // Abbassa il volume gradualmente per non farlo finire di colpo
+            guadagno.gain.setValueAtTime(0.3, audioContext.currentTime);
+            guadagno.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+            
+            osc.connect(guadagno);
+            guadagno.connect(audioContext.destination);
+            
+            osc.start();
+            osc.stop(audioContext.currentTime + 0.15);
         }
 
         function analizzaAudio() {
@@ -141,152 +215,158 @@
             };
         }
 
-        // Funzione per disegnare l'orsetto usando i cerchi
-        function disegnaOrsetto(x, y, r) {
+        // DISEGNA L'ORSETTO COMPLETO (Corpo, Zampe animate e Testa)
+        function disegnaOrsettoCompleto(x, y, r) {
             ctx.save();
             
-            // 1. ORECCHIE
-            ctx.fillStyle = "#8B4513"; // Marrone orsetto
+            // Calcoliamo l'oscillazione delle zampe usando il seno (valore oscilla tra -1 e 1)
+            let oscillazione = Math.sin(tempoAnimazione) * (r * 0.4);
+
+            // 1. LE QUATTRO ZAMPINE (Nuotatrici)
+            ctx.fillStyle = "#8B4513";
+            // Zampa Alto-Sinistra
+            ctx.beginPath(); ctx.arc(x - r * 0.4 + oscillazione, y - r * 0.8, r * 0.3, 0, Math.PI * 2); ctx.fill();
+            // Zampa Basso-Sinistra
+            ctx.beginPath(); ctx.arc(x - r * 0.4 - oscillazione, y + r * 0.8, r * 0.3, 0, Math.PI * 2); ctx.fill();
+            // Zampa Alto-Destra
+            ctx.beginPath(); ctx.arc(x + r * 0.6 - oscillazione, y - r * 0.6, r * 0.28, 0, Math.PI * 2); ctx.fill();
+            // Zampa Basso-Destra
+            ctx.beginPath(); ctx.arc(x + r * 0.6 + oscillazione, y + r * 0.6, r * 0.28, 0, Math.PI * 2); ctx.fill();
+
+            // 2. CORPO DELL'ORSETTO
+            ctx.fillStyle = "#A0522D";
             ctx.beginPath();
-            ctx.arc(x - r * 0.7, y - r * 0.7, r * 0.35, 0, Math.PI * 2); // Orecchia sx
-            ctx.arc(x + r * 0.7, y - r * 0.7, r * 0.35, 0, Math.PI * 2); // Orecchia dx
-            ctx.fill();
-            
-            ctx.fillStyle = "#FFB6C1"; // Rosa interno orecchie
-            ctx.beginPath();
-            ctx.arc(x - r * 0.7, y - r * 0.7, r * 0.18, 0, Math.PI * 2);
-            ctx.arc(x + r * 0.7, y - r * 0.7, r * 0.18, 0, Math.PI * 2);
+            // Disegnamo un ovale per il corpo disteso che nuota verso destra
+            ctx.ellipse(x, y, r * 1.2, r * 0.8, 0, 0, Math.PI * 2);
             ctx.fill();
 
-            // 2. TESTA PRINCIPALE
-            ctx.fillStyle = "#A0522D"; // Marrone chiaro/scuro
+            // 3. ORECCHIE (Spostate leggermente in avanti a sinistra)
+            ctx.fillStyle = "#8B4513";
             ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.arc(x - r * 0.5, y - r * 1.3, r * 0.3, 0, Math.PI * 2);
+            ctx.arc(x + r * 0.3, y - r * 1.3, r * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#FFB6C1";
+            ctx.beginPath();
+            ctx.arc(x - r * 0.5, y - r * 1.3, r * 0.15, 0, Math.PI * 2);
+            ctx.arc(x + r * 0.3, y - r * 1.3, r * 0.15, 0, Math.PI * 2);
             ctx.fill();
 
-            // 3. MUSETTO BIANCESTRO
-            ctx.fillStyle = "#FFF8DC"; 
+            // 4. TESTA (Messa davanti al corpo)
+            ctx.fillStyle = "#A0522D";
             ctx.beginPath();
-            ctx.arc(x, y + r * 0.2, r * 0.4, 0, Math.PI * 2);
+            ctx.arc(x - r * 0.2, y - r * 0.6, r * 0.8, 0, Math.PI * 2);
             ctx.fill();
 
-            // 4. NASINO NERO
+            // 5. MUSETTO BIANCESTRO E NASINO
+            ctx.fillStyle = "#FFF8DC";
+            ctx.beginPath();
+            ctx.arc(x - r * 0.2, y - r * 0.4, r * 0.35, 0, Math.PI * 2);
+            ctx.fill();
             ctx.fillStyle = "#000000";
             ctx.beginPath();
-            ctx.arc(x, y + r * 0.05, r * 0.12, 0, Math.PI * 2);
+            ctx.arc(x - r * 0.2, y - r * 0.5, r * 0.1, 0, Math.PI * 2);
             ctx.fill();
 
-            // 5. OCCHIETTI
+            // 6. OCCHIETTI
             ctx.fillStyle = "#000000";
             ctx.beginPath();
-            ctx.arc(x - r * 0.3, y - r * 0.2, r * 0.08, 0, Math.PI * 2); // Occhio sx
-            ctx.arc(x + r * 0.3, y - r * 0.2, r * 0.08, 0, Math.PI * 2); // Occhio dx
+            ctx.arc(x - r * 0.4, y - r * 0.8, r * 0.08, 0, Math.PI * 2);
+            ctx.arc(x + r * 0.0, y - r * 0.8, r * 0.08, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.restore();
         }
 
-        // Funzione per disegnare una caramella colorata incartata
         function disegnaCaramella(x, y, colore) {
             ctx.save();
             ctx.fillStyle = colore;
-
-            // Fiocchetti laterali dell'incarto (Triangoli)
             ctx.beginPath();
-            ctx.moveTo(x - 25, y - 10);
-            ctx.lineTo(x - 25, y + 10);
-            ctx.lineTo(x, y);
-            ctx.moveTo(x + 25, y - 10);
-            ctx.lineTo(x + 25, y + 10);
-            ctx.lineTo(x, y);
+            ctx.moveTo(x - 22, y - 8); ctx.lineTo(x - 22, y + 8); ctx.lineTo(x, y);
+            ctx.moveTo(x + 22, y - 8); ctx.lineTo(x + 22, y + 8); ctx.lineTo(x, y);
             ctx.fill();
-
-            // Corpo centrale della caramella (Ovale/Cerchio)
-            ctx.beginPath();
-            ctx.arc(x, y, 14, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Decorazione bianca interna
-            ctx.strokeStyle = "white";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(x, y, 7, 0, Math.PI * 2);
-            ctx.stroke();
-
+            ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = "white"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.stroke();
             ctx.restore();
         }
 
         function loopPrincipale() {
             if (!giocoAvviato) return;
 
-            // Sfondo azzurro pulito ad ogni frame
-            ctx.fillStyle = "#87CEEB";
+            // Sfondo mare/cielo
+            ctx.fillStyle = "#5F9EA0"; // Colore verde acqua/bluastro da nuoto
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             let datiAudio = analizzaAudio();
 
-            // 1. MODIFICA GRANDEZZA ORSETTO (Volume della voce)
-            orsetto.raggioAttuale = orsetto.raggioBase + (datiAudio.volume * 90);
+            // 1. AGGIORNA GRANDEZZA (In base al Volume)
+            orsetto.raggioAttuale = orsetto.raggioBase + (datiAudio.volume * 80);
 
-            // 2. MODIFICA ALTEZZA ORSETTO (Frequenza/Tono della voce)
-            if (datiAudio.volume > 0.08) { // Attivo se il bambino parla/canta
-                let fattoreScala = canvas.height / 500;
-                let bersaglioY = canvas.height - (datiAudio.frequenza * fattoreScala);
-                // Evitiamo che l'orsetto esca dallo schermo
-                bersaglioY = Math.max(orsetto.raggioAttuale, Math.min(canvas.height - orsetto.raggioAttuale, bersaglioY));
-                orsetto.y += (bersaglioY - orsetto.y) * 0.15; // Inerzia per renderlo fluido
+            // Incremeneta il tempo dell'animazione delle zampe se l'orsetto si muove
+            tempoAnimazione += 0.2;
+
+            // 2. AGGIORNA POSIZIONE VERTICALE (Con Calibrazione Range Frequenza)
+            if (datiAudio.volume > 0.08) {
+                // Limitiamo la frequenza letta all'interno del range impostato dai cursori
+                let freqBloccata = Math.max(FREQ_MIN, Math.min(FREQ_MAX, datiAudio.frequenza));
+                
+                // Trasformiamo la frequenza in una percentuale (da 0 a 1) all'interno del range
+                let percentuale = (freqBloccata - FREQ_MIN) / (FREQ_MAX - FREQ_MIN);
+                
+                // Calcoliamo l'altezza Y ideale basandoci sulla percentuale (0% = fondo dello schermo, 100% = cima)
+                let bersaglioY = canvas.height - (percentuale * (canvas.height - orsetto.raggioAttuale * 2)) - orsetto.raggioAttuale;
+                
+                // Fluidità di movimento
+                orsetto.y += (bersaglioY - orsetto.y) * 0.12;
             }
 
-            // 3. GENERAZIONE DELLE CARAMELLE (Una nuova caramella ogni circa 2 secondi)
+            // 3. GENERAZIONE CARAMELLE
             timerCaramelle++;
-            if (timerCaramelle > 120) {
+            if (timerCaramelle > 100) {
                 let colori = ['#FF1493', '#00FF00', '#FFD700', '#FF4500', '#9400D3'];
-                let coloreCasuale = colori[Math.floor(Math.random() * colori.length)];
-                
                 caramelle.push({
                     x: canvas.width + 30,
-                    y: Math.random() * (canvas.height - 100) + 50,
-                    velocita: Math.random() * 2 + 1.5, // Velocità della caramella verso sinistra
-                    colore: coloreCasuale
+                    y: Math.random() * (canvas.height - 120) + 60,
+                    velocita: Math.random() * 2 + 2,
+                    colore: colori[Math.floor(Math.random() * colori.length)]
                 });
                 timerCaramelle = 0;
             }
 
-            // 4. GESTIONE E DISEGNO CARAMELLE
+            // 4. MOVIMENTO CARAMELLE E COLLISIONI
             for (let i = caramelle.length - 1; i >= 0; i--) {
                 let c = caramelle[i];
-                c.x -= c.velocita; // Muove la caramella verso l'orsetto
+                c.x -= c.velocita;
 
                 disegnaCaramella(c.x, c.y, c.colore);
 
-                // CONTROLLO COLLISIONE: L'orsetto mangia la caramella?
-                let distanzaX = orsetto.x - c.x;
-                let distanzaY = orsetto.y - c.y;
-                let distanza = Math.sqrt(distanzaX * distanzaX + distanceY * distanceY);
+                // Formula matematica di distanza
+                let distX = orsetto.x - c.x;
+                let distY = orsetto.y - c.y;
+                let distanza = Math.sqrt(distX * distX + distY * distY);
 
-                // Se la caramella entra nel raggio della testa dell'orsetto... Gnam!
-                if (distanza < orsetto.raggioAttuale + 15) {
+                // GNAM! Collisione avvenuta
+                if (distanza < orsetto.raggioAttuale + 20) {
                     punteggio += 1;
-                    caramelle.splice(i, 1); // Rimuove la caramella mangiata
+                    playSuonoGnam(); // RIPRODUCE IL SUONO DELIZIOSO!
+                    caramelle.splice(i, 1);
                     continue;
                 }
 
-                // Rimuove le caramelle se escono dallo schermo a sinistra per non rallentare il telefono
-                if (c.x < -30) {
-                    caramelle.splice(i, 1);
-                }
+                if (c.x < -30) caramelle.splice(i, 1);
             }
 
-            // 5. DISEGNA L'ORSETTO
-            disegnaOrsetto(orsetto.x, orsetto.y, orsetto.raggioAttuale);
+            // 5. DISEGNA L'ORSETTO MENTRE NUOTA
+            disegnaOrsettoCompleto(orsetto.x, orsetto.y, orsetto.raggioAttuale);
 
-            // 6. SCRIVI IL PUNTEGGIO SULLO SCHERMO
+            // 6. TESTO PUNTEGGIO
             ctx.fillStyle = "white";
-            ctx.font = "bold 32px 'Arial Rounded MT Bold', Arial";
-            ctx.strokeStyle = "#4A2711";
+            ctx.font = "bold 30px Arial";
+            ctx.strokeStyle = "#2F4F4F";
             ctx.lineWidth = 5;
-            ctx.strokeText("Caramelle Mangiate: " + punteggio, 20, 50);
-            ctx.fillText("Caramelle Mangiate: " + punteggio, 20, 50);
+            ctx.strokeText("Punti: " + punteggio, 20, 50);
+            ctx.fillText("Punti: " + punteggio, 20, 50);
 
             requestAnimationFrame(loopPrincipale);
         }
