@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>L'Orsetto Nuotatore Vocale - Android FailSafe</title>
+    <title>L'Orsetto Nuotatore Vocale - Android Definitivo</title>
     <style>
         body {
             margin: 0;
@@ -33,7 +33,6 @@
             box-shadow: 0 10px 20px rgba(0,0,0,0.3);
             z-index: 50;
         }
-        
         #TriggerMenu {
             position: absolute;
             top: 10px;
@@ -48,9 +47,7 @@
             cursor: pointer;
             z-index: 25;
             display: none;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
-
         #pannello-controllo {
             position: absolute;
             top: -500px;
@@ -68,11 +65,9 @@
             -webkit-overflow-scrolling: touch; 
             transition: top 0.4s ease-in-out;
         }
-        
         #pannello-controllo.aperto {
             top: 55px;
         }
-
         .controllo-gruppo {
             margin-bottom: 10px;
         }
@@ -110,9 +105,28 @@
             align-items: center;
             text-align: center;
         }
+        /* Schermata rossa di emergenza per leggere gli errori su Android */
+        #schermo-errore {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: rgba(200, 0, 0, 0.95);
+            color: white;
+            z-index: 100;
+            padding: 20px;
+            box-sizing: border-box;
+            font-family: monospace;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
+
+    <div id="schermo-errore">
+        <h2>⚠️ Errore rilevato nel codice:</h2>
+        <pre id="testo-errore" style="background:#222; padding:15px; border-radius:5px; white-space:pre-wrap;"></pre>
+        <button onclick="document.getElementById('schermo-errore').style.display='none'" style="padding:10px;">Chiudi</button>
+    </div>
 
     <div id="avviso-landscape">
         <p style="font-size: 24px;">Gira il dispositivo in Orizzontale!<br><small>Attiva la rotazione automatica</small></p>
@@ -151,6 +165,13 @@
     <canvas id="quadroGioco"></canvas>
 
     <script>
+        // Cattura gli errori e mostrali a schermo su Android
+        window.onerror = function(message, source, lineno, colno, error) {
+            document.getElementById('schermo-errore').style.display = 'block';
+            document.getElementById('testo-errore').innerText = message + '\nLinea: ' + lineno;
+            return false;
+        };
+
         const canvas = document.getElementById('quadroGioco');
         const ctx = canvas.getContext('2d');
         const pulsante = document.getElementById('pulsante-avvio');
@@ -252,24 +273,15 @@
         window.addEventListener('orientationchange', () => { setTimeout(controllaOrientamento, 300); });
         controllaOrientamento();
 
-        // DOCUMENTAZIONE MODIFICA DI AVVIO:
-        // Rimosso il blocco d'attesa (await). Ora il click esegue subito i comandi grafici.
+        // CORREZIONE SINTASSI APPLICATA QUI (giocoAvviato = true tutto in minuscolo)
         pulsante.addEventListener('click', () => {
-            // 1. Proviamo a bloccare l'orientamento in modo leggero, senza bloccare il codice se fallisce
             if (screen.orientation && screen.orientation.lock) {
                 screen.orientation.lock('landscape').catch(() => {});
             }
-            
-            // 2. Nascondiamo il pulsante di avvio e mostriamo il menu opzioni immediatamente
             pulsante.style.display = 'none';
             triggerMenu.style.display = 'block'; 
-            
-            # 3. ATTIVAZIONE FLUIDA: Impostiamo lo stato di gioco su TRUE e lanciamo il loop grafico
-            giocoAvviato = True;
+            giocoAvviato = true;
             loopPrincipale();
-            
-            # 4. Inizializziamo l'audio in background. Se il sistema Android richiede conferme,
-            # lo schermo del gioco rimarrà attivo e le caramelle cominceranno comunque a scorrere!
             inizializzaAudio();
         });
 
@@ -283,8 +295,7 @@
                 sorgente.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
             } catch (err) {
-                // Se l'utente rifiuta o il browser blocca, inviamo un log invisibile senza bloccare il gioco
-                console.log("Inizializzazione microfono in attesa di permessi touch.");
+                console.log("Inizializzazione microfono fallita.");
             }
         }
 
