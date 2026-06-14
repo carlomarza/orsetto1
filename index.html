@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>L'Orsetto Nuotatore Vocale - Android Definitivo</title>
+    <title>L'Orsetto Nuotatore - Smooth Pitch</title>
     <style>
         body {
             margin: 0;
@@ -105,45 +105,25 @@
             align-items: center;
             text-align: center;
         }
-        /* Schermata rossa di emergenza per leggere gli errori su Android */
-        #schermo-errore {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background-color: rgba(200, 0, 0, 0.95);
-            color: white;
-            z-index: 100;
-            padding: 20px;
-            box-sizing: border-box;
-            font-family: monospace;
-            overflow-y: auto;
-        }
     </style>
 </head>
 <body>
-
-    <div id="schermo-errore">
-        <h2>⚠️ Errore rilevato nel codice:</h2>
-        <pre id="testo-errore" style="background:#222; padding:15px; border-radius:5px; white-space:pre-wrap;"></pre>
-        <button onclick="document.getElementById('schermo-errore').style.display='none'" style="padding:10px;">Chiudi</button>
-    </div>
 
     <div id="avviso-landscape">
         <p style="font-size: 24px;">Gira il dispositivo in Orizzontale!<br><small>Attiva la rotazione automatica</small></p>
     </div>
 
     <button id="pulsante-avvio">🐻 ENTRA NEL MARE DELLE CARAMELLE! 🍭</button>
-
     <button id="TriggerMenu">⚙️ Opzioni Menu</button>
 
     <div id="pannello-controllo">
         <div class="controllo-gruppo">
-            <label>Voce Grave (Min): <span id="val-min">150</span> Hz</label>
-            <input type="range" id="freq-min" min="60" max="400" value="150">
+            <label>Voce Grave (Min): <span id="val-min">130</span> Hz</label>
+            <input type="range" id="freq-min" min="60" max="300" value="130">
         </div>
         <div class="controllo-gruppo">
-            <label>Voce Acuta (Max): <span id="val-max">800</span> Hz</label>
-            <input type="range" id="freq-max" min="400" max="2000" value="800">
+            <label>Voce Acuta (Max): <span id="val-max">600</span> Hz</label>
+            <input type="range" id="freq-max" min="300" max="1500" value="600">
         </div>
         <div class="controllo-gruppo">
             <label>Velocità Caramelle: <span id="val-vel">3</span></label>
@@ -165,13 +145,6 @@
     <canvas id="quadroGioco"></canvas>
 
     <script>
-        // Cattura gli errori e mostrali a schermo su Android
-        window.onerror = function(message, source, lineno, colno, error) {
-            document.getElementById('schermo-errore').style.display = 'block';
-            document.getElementById('testo-errore').innerText = message + '\nLinea: ' + lineno;
-            return false;
-        };
-
         const canvas = document.getElementById('quadroGioco');
         const ctx = canvas.getContext('2d');
         const pulsante = document.getElementById('pulsante-avvio');
@@ -194,8 +167,9 @@
         const btnToggleReattivo = document.getElementById('btn-toggle-reattivo');
         const btnCambiaFaccia = document.getElementById('btn-cambia-faccia');
 
-        let FREQ_MIN = 150;
-        let FREQ_MAX = 800;
+        // Impostiamo range più adatti alla voce dei bambini (130Hz - 600Hz di base)
+        let FREQ_MIN = 130;
+        let FREQ_MAX = 600;
         let VELOCITA_MOLTIPLICATORE = 3.0;
         let SPAWN_RITMO = 90; 
         let GRANDEZZA_BASE = 35;
@@ -252,6 +226,7 @@
         let timerFlash = 0;
 
         let audioContext, analyser, dataArray;
+        let frequenzaFiltriata = 150; // Valore di memoria per lo smoothing logaritmico
 
         let sfondoImg = new Image();
         let sfondoCaricato = false;
@@ -273,7 +248,6 @@
         window.addEventListener('orientationchange', () => { setTimeout(controllaOrientamento, 300); });
         controllaOrientamento();
 
-        // CORREZIONE SINTASSI APPLICATA QUI (giocoAvviato = true tutto in minuscolo)
         pulsante.addEventListener('click', () => {
             if (screen.orientation && screen.orientation.lock) {
                 screen.orientation.lock('landscape').catch(() => {});
@@ -291,7 +265,7 @@
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 const sorgente = audioContext.createMediaStreamSource(stream);
                 analyser = audioContext.createAnalyser();
-                analyser.fftSize = 2048;
+                analyser.fftSize = 2048; // Dimensione ottimale per catturare la precisione del pitch
                 sorgente.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
             } catch (err) {
@@ -315,19 +289,31 @@
             });
         }
 
+        // ALGORITMO DI TRACCIAMENTO PITCH AVANZATO
         function analizzaAudio() {
             if (!analyser) return { volume: 0, frequenza: 0 };
             analyser.getByteFrequencyData(dataArray);
-            let volumeMassimo = 0, indiceFrequenzaMassima = 0;
+            
+            let volumeMassimo = 0;
+            let indiceFrequenzaMassima = 0;
+            let sommaVolume = 0;
+
+            // Troviamo il picco di frequenza dominante
             for (let i = 0; i < dataArray.length; i++) {
+                sommaVolume += dataArray[i];
                 if (dataArray[i] > volumeMassimo) {
                     volumeMassimo = dataArray[i];
                     indiceFrequenzaMassima = i;
                 }
             }
+            
+            let volumeMedio = (sommaVolume / dataArray.length) / 255;
+            let frequenzaGrezza = indiceFrequenzaMassima * audioContext.sampleRate / analyser.fftSize;
+
             return {
                 volume: volumeMassimo / 255,
-                frequenza: indiceFrequenzaMassima * audioContext.sampleRate / analyser.fftSize
+                volumeMedio: volumeMedio,
+                frequenza: frequenzaGrezza
             };
         }
 
@@ -412,11 +398,34 @@
             }
             tempoAnimazione += 0.2;
 
-            if (datiAudio.volume > 0.08) {
-                let freqBloccata = Math.max(FREQ_MIN, Math.min(FREQ_MAX, datiAudio.frequenza));
-                let percentuale = (freqBloccata - FREQ_MIN) / (FREQ_MAX - FREQ_MIN);
-                let bersaglioY = canvas.height - (percentuale * (canvas.height - orsetto.raggioAttuale * 2)) - orsetto.raggioAttuale;
-                orsetto.y += (bersaglioY - orsetto.y) * 0.12;
+            // NUOVA LOGICA DI MOVIMENTO MORBIDA (CONVERTITA IN LOGARITMICA)
+            // Filtriamo i rumori di fondo leggeri guardando il volume medio
+            if (datiAudio.volume > 0.07 && datiAudio.frequenza > 50) {
+                
+                // 1. Applichiamo lo smoothing alla frequenza in ingresso per evitare balzi improvvisi
+                // L'espressione stabilizza la frequenza prendendo il 25% del nuovo dato e il 75% del vecchio
+                frequenzaFiltriata = (frequenzaFiltriata * 0.75) + (datiAudio.frequenza * 0.25);
+                
+                let freqBloccata = Math.max(FREQ_MIN, Math.min(FREQ_MAX, frequenzaFiltriata));
+                
+                // 2. Scala Logaritmica: Calcoliamo la posizione in base a come l'essere umano percepisce le note musicali
+                let logMin = Math.log2(FREQ_MIN);
+                let logMax = Math.log2(FREQ_MAX);
+                let logAttuale = Math.log2(freqBloccata);
+                
+                let percentuale = (logAttuale - logMin) / (logMax - logMin);
+                
+                // 3. Calcoliamo l'altezza Y bersaglio (0% = fondo dello schermo, 100% = cima dello schermo)
+                let altezzaUtile = canvas.height - (orsetto.raggioAttuale * 2.5);
+                let bersaglioY = canvas.height - (percentuale * altezzaUtile) - orsetto.raggioAttuale;
+                
+                // 4. LERP (Smorzamento lineare): L'orsetto si sposta verso il bersaglio coprendo il 10% della distanza a ogni frame.
+                // Questo rende il nuoto fluidissimo, privo di vibrazioni ondulatorie fastidiose.
+                orsetto.y += (bersaglioY - orsetto.y) * 0.10;
+            } else {
+                // Se c'è silenzio, l'orsetto scivola dolcemente verso il fondo
+                let fondoSchermo = canvas.height - orsetto.raggioAttuale - 10;
+                orsetto.y += (fondoSchermo - orsetto.y) * 0.05;
             }
 
             timerCaramelle++;
