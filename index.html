@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>L'Orsetto Nuotatore Vocale - Pro Version</title>
+    <title>L'Orsetto Nuotatore Vocale - Android Fixed</title>
     <style>
         body {
             margin: 0;
@@ -30,16 +30,15 @@
             border: 4px solid white;
             border-radius: 50px;
             font-weight: bold;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-            z-index: 30;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            z-index: 50; /* Sempre sopra a tutto il resto prima di partire */
         }
         
-        /* BOTTONE PER APRIRE/CHIUDERE IL MENU */
         #TriggerMenu {
             position: absolute;
             top: 10px;
             left: 10px;
-            background-color: rgba(0, 0, 0, 0.75);
+            background-color: rgba(0, 0, 0, 0.8);
             color: #00ffcc;
             border: 2px solid white;
             padding: 8px 15px;
@@ -48,53 +47,59 @@
             font-weight: bold;
             cursor: pointer;
             z-index: 25;
-            display: none; /* Appare solo a gioco avviato */
+            display: none;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
 
-        /* PANNELLO DI CONTROLLO A SCOMPARSA (Slitta dall'alto) */
+        /* PANNELLO DI CONTROLLO SCORREVOLE (Risolve il problema del taglio schermo) */
         #pannello-controllo {
             position: absolute;
-            top: -400px; /* Nascosto inizialmente sopra lo schermo */
+            top: -500px;
             left: 10px;
-            background-color: rgba(0, 0, 0, 0.85);
+            background-color: rgba(0, 0, 0, 0.9);
             padding: 15px;
             border-radius: 15px;
             font-size: 13px;
             z-index: 20;
             backdrop-filter: blur(5px);
-            border: 2px solid rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.3);
             width: 260px;
-            transition: top 0.4s ease-in-out; /* Animazione fluida di apertura */
+            
+            /* CORREZIONE PER ANDROID: Se il menu è troppo lungo, attiva lo scorrimento col dito */
+            max-height: 75vh; 
+            overflow-y: auto; 
+            -webkit-overflow-scrolling: touch; /* Rende lo scorrimento fluidissimo su smartphone */
+            
+            transition: top 0.4s ease-in-out;
         }
         
-        /* Classe attivata via JavaScript per mostrare il menu */
         #pannello-controllo.aperto {
-            top: 55px; /* Scende sotto il bottone di trigger */
+            top: 55px;
         }
 
         .controllo-gruppo {
-            margin-bottom: 8px;
+            margin-bottom: 10px;
         }
         .controllo-gruppo label {
             display: block;
-            margin-bottom: 2px;
+            margin-bottom: 3px;
             color: #00ffcc;
             font-weight: bold;
         }
         .controllo-gruppo input {
             width: 100%;
+            height: 20px; /* Più facile da acchiappare con le dita */
         }
         .btn-touch {
             background-color: #4682B4;
             color: white;
             border: 2px solid white;
-            padding: 6px 12px;
+            padding: 8px 12px;
             border-radius: 10px;
             font-weight: bold;
-            font-size: 12px;
+            font-size: 13px;
             cursor: pointer;
-            margin-top: 5px;
+            margin-top: 6px;
             width: 100%;
             display: block;
         }
@@ -103,7 +108,7 @@
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
             background-color: #87CEEB;
-            z-index: 40;
+            z-index: 45;
             flex-direction: column;
             justify-content: center;
             align-items: center;
@@ -134,12 +139,10 @@
             <label>Velocità Caramelle: <span id="val-vel">3</span></label>
             <input type="range" id="vel-caramelle" min="1" max="10" step="0.5" value="3">
         </div>
-        
         <div class="controllo-gruppo">
-            <label>Quantità Caramelle (Ritmo): <span id="val-qty">Media</span></label>
+            <label>Quantità Caramelle: <span id="val-qty">Media</span></label>
             <input type="range" id="qty-caramelle" min="30" max="180" step="15" value="90">
         </div>
-
         <div class="controllo-gruppo">
             <label>Dimensione Base Orso: <span id="val-size">35</span></label>
             <input type="range" id="size-orso" min="15" max="80" value="35">
@@ -174,26 +177,22 @@
         const btnToggleReattivo = document.getElementById('btn-toggle-reattivo');
         const btnCambiaFaccia = document.getElementById('btn-cambia-faccia');
 
-        // Parametri iniziali
         let FREQ_MIN = 150;
         let FREQ_MAX = 800;
         let VELOCITA_MOLTIPLICATORE = 3.0;
-        let SPAWN_RITMO = 90; // Frame di attesa tra una caramella e l'altra (meno frame = più caramelle)
+        let SPAWN_RITMO = 90; 
         let GRANDEZZA_BASE = 35;
         let GRANDEZZA_REATTIVA = true;
 
-        // Gestione Menu a scomparsa al click/tocco
         triggerMenu.addEventListener('click', () => {
             pannello.classList.toggle('aperto');
         });
 
-        // Configurazione cursori
         sliderMin.addEventListener('input', (e) => { FREQ_MIN = parseInt(e.target.value); txtMin.innerText = FREQ_MIN; });
         sliderMax.addEventListener('input', (e) => { FREQ_MAX = parseInt(e.target.value); txtMax.innerText = FREQ_MAX; });
         sliderVel.addEventListener('input', (e) => { VELOCITA_MOLTIPLICATORE = parseFloat(e.target.value); txtVel.innerText = VELOCITA_MOLTIPLICATORE; });
         sliderSize.addEventListener('input', (e) => { GRANDEZZA_BASE = parseInt(e.target.value); txtSize.innerText = GRANDEZZA_BASE; orsetto.raggioBase = GRANDEZZA_BASE; });
         
-        // Mappatura testo per il ritmo delle caramelle
         sliderQty.addEventListener('input', (e) => { 
             SPAWN_RITMO = parseInt(e.target.value); 
             if(SPAWN_RITMO <= 45) txtQty.innerText = "Tantissime! 🔥";
@@ -209,7 +208,6 @@
             btnToggleReattivo.style.backgroundColor = GRANDEZZA_REATTIVA ? "#4682B4" : "#808080";
         });
 
-        // Logica facce bambini
         let facceBambini = [];
         let indiceFacciaAttuale = -1;
         for (let i = 1; i <= 3; i++) {
@@ -220,7 +218,7 @@
 
         btnCambiaFaccia.addEventListener('click', () => {
             if (facceBambini.length === 0) {
-                alert("Carica i file bambino1.png, bambino2.png su GitHub per attivare questa opzione!");
+                alert("Nessuna foto 'bambino1.png' trovata su GitHub.");
                 return;
             }
             indiceFacciaAttuale++;
@@ -228,7 +226,6 @@
             btnCambiaFaccia.innerText = "🎭 Faccia: " + (indiceFacciaAttuale === -1 ? "Orsetto" : `Bambino ${facceBambini[indiceFacciaAttuale].id}`);
         });
 
-        // Stato Oggetti
         let orsetto = { x: 180, y: window.innerHeight / 2, raggioBase: 35, raggioAttuale: 35 };
         let caramelle = [];
         let punteggio = 0;
@@ -264,7 +261,7 @@
                 screen.orientation.lock('landscape').catch(() => {});
             }
             pulsante.style.display = 'none';
-            triggerMenu.style.display = 'block'; // Mostra l'ingranaggio delle opzioni
+            triggerMenu.style.display = 'block'; 
             await inizializzaAudio();
             giocoAvviato = true;
             loopPrincipale();
@@ -384,13 +381,12 @@
             tempoAnimazione += 0.2;
 
             if (datiAudio.volume > 0.08) {
-                let freqBloccata = Math.max(FREQ_MIN, min(FREQ_MAX, datiAudio.frequenza));
+                let freqBloccata = Math.max(FREQ_MIN, Math.min(FREQ_MAX, datiAudio.frequenza));
                 let percentuale = (freqBloccata - FREQ_MIN) / (FREQ_MAX - FREQ_MIN);
                 let bersaglioY = canvas.height - (percentuale * (canvas.height - orsetto.raggioAttuale * 2)) - orsetto.raggioAttuale;
                 orsetto.y += (bersaglioY - orsetto.y) * 0.12;
             }
 
-            // GENERAZIONE CARAMELLE DINAMICA (Legata al parametro SPAWN_RITMO)
             timerCaramelle++;
             if (timerCaramelle > SPAWN_RITMO) {
                 let tipoChupa = Math.random() < 0.15;
@@ -415,7 +411,7 @@
 
                 let distX = orsetto.x - c.x; let distY = orsetto.y - c.y;
                 let distanza = Math.sqrt(distX * distX + distY * distY);
-                let raggioCollisione = c.isSuper ? (orsetto.raggioAttuale + 26) : (orsetto.raggioActual || orsetto.raggioAttuale + 20);
+                let raggioCollisione = c.isSuper ? (orsetto.raggioAttuale + 26) : (orsetto.raggioAttuale + 20);
 
                 if (distanza < raggioCollisione) {
                     punteggio += c.isSuper ? 5 : 1;
@@ -428,7 +424,6 @@
 
             disegnaOrsettoCompleto(orsetto.x, orsetto.y, orsetto.raggioAttuale);
 
-            // Punteggio spostato a destra per non sovrapporsi mai al tasto menu
             ctx.fillStyle = "white"; ctx.font = "bold 30px Arial"; ctx.strokeStyle = "#2F4F4F"; ctx.lineWidth = 5;
             ctx.strokeText("Punti: " + punteggio, canvas.width - 180, 40); 
             ctx.fillText("Punti: " + punteggio, canvas.width - 180, 40);
